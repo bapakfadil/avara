@@ -36,7 +36,7 @@ To get the Avara project up and running on your local machine, follow these step
 **1. Clone the Repository**
 
 ```
-bash git clone https://github.com/your-username/avara.git cd avara
+bash git clone https://github.com/bapakfadil/avara.git cd avara
 ```
 
 **2. Set up Firebase**
