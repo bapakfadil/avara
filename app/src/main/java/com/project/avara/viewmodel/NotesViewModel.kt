@@ -51,24 +51,18 @@ class NotesViewModel : ViewModel() {
                 }
         }
     }
-    
+
     fun createNote(title: String, content: String) {
         viewModelScope.launch {
             _notesState.value = _notesState.value.copy(isLoading = true, error = null)
-            
             val note = Note(
                 title = title.ifBlank { "Untitled" },
                 content = content
             )
-            
             notesRepository.createNote(note)
-                .onSuccess { createdNote ->
-                    val updatedNotes = listOf(createdNote) + _notesState.value.notes
-                    _notesState.value = _notesState.value.copy(
-                        isLoading = false,
-                        notes = updatedNotes,
-                        error = null
-                    )
+                .onSuccess {
+                    // On success, just reload the list from the source of truth
+                    loadNotes()
                 }
                 .onFailure { exception ->
                     _notesState.value = _notesState.value.copy(
@@ -78,21 +72,14 @@ class NotesViewModel : ViewModel() {
                 }
         }
     }
-    
+
     fun updateNote(note: Note) {
         viewModelScope.launch {
             _notesState.value = _notesState.value.copy(isLoading = true, error = null)
-            
             notesRepository.updateNote(note)
-                .onSuccess { updatedNote ->
-                    val updatedNotes = _notesState.value.notes.map { 
-                        if (it.id == updatedNote.id) updatedNote else it 
-                    }
-                    _notesState.value = _notesState.value.copy(
-                        isLoading = false,
-                        notes = updatedNotes,
-                        error = null
-                    )
+                .onSuccess {
+                    // On success, just reload the list
+                    loadNotes()
                 }
                 .onFailure { exception ->
                     _notesState.value = _notesState.value.copy(
@@ -102,19 +89,14 @@ class NotesViewModel : ViewModel() {
                 }
         }
     }
-    
+
     fun deleteNote(noteId: String) {
         viewModelScope.launch {
             _notesState.value = _notesState.value.copy(isLoading = true, error = null)
-            
             notesRepository.deleteNote(noteId)
                 .onSuccess {
-                    val updatedNotes = _notesState.value.notes.filter { it.id != noteId }
-                    _notesState.value = _notesState.value.copy(
-                        isLoading = false,
-                        notes = updatedNotes,
-                        error = null
-                    )
+                    // On success, just reload the list
+                    loadNotes()
                 }
                 .onFailure { exception ->
                     _notesState.value = _notesState.value.copy(
@@ -123,6 +105,11 @@ class NotesViewModel : ViewModel() {
                     )
                 }
         }
+    }
+
+    fun logout() {
+        // Clear the user-specific data from the state
+        _notesState.value = NotesState()
     }
     
     fun clearError() {

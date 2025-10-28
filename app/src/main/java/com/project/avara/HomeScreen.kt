@@ -56,6 +56,10 @@ fun HomeScreen(
     val quoteViewModel: QuoteViewModel = viewModel()
     val quoteState by quoteViewModel.quoteState
 
+    LaunchedEffect(Unit) {
+        notesViewModel.loadNotes()
+    }
+
     BackHandler(enabled = true) {
         showCloseAppDialog = true
     }
@@ -329,6 +333,7 @@ fun HomeScreen(
                     TextButton(
                         onClick = {
                             showLogoutDialog = false
+                            notesViewModel.logout()
                             onLogoutClick() // Perform the actual logout
                         }
                     ) {

@@ -31,29 +31,26 @@ class NotesRepository(
             Result.failure(e)
         }
     }
-    
+
     suspend fun getNotes(): Result<List<Note>> {
         return try {
             val userId = getCurrentUserId()
             if (userId == null) {
                 return Result.failure(Exception("User not authenticated"))
             }
-            
+
+            // MODIFIED QUERY
             val snapshot = notesCollection
                 .whereEqualTo("userId", userId)
+                .orderBy("updatedAt", Query.Direction.DESCENDING)
                 .get()
                 .await()
-            
+
+            // SIMPLIFIED MAPPING
             val notes = snapshot.documents.mapNotNull { document ->
-                try {
-                    document.toObject(Note::class.java)?.copy(id = document.id)
-                } catch (e: Exception) {
-                    null
-                }
-            }.sortedByDescending { note ->
-                note.createdAt?.toDate()?.time ?: 0L
+                document.toObject(Note::class.java)?.copy(id = document.id)
             }
-            
+
             Result.success(notes)
         } catch (e: Exception) {
             Result.failure(e)
