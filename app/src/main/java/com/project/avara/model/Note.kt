@@ -13,7 +13,8 @@ data class Note(
     @ServerTimestamp
     val createdAt: Timestamp? = null,
     @ServerTimestamp
-    val updatedAt: Timestamp? = null
+    val updatedAt: Timestamp? = null,
+    val reminderTime: Timestamp? = null
 ) {
     // Helper function to get formatted date
     fun getFormattedDate(): String {

@@ -1,5 +1,15 @@
 package com.project.avara
 
+import android.Manifest
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import androidx.compose.ui.platform.LocalContext
+import java.text.SimpleDateFormat
+import java.util.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
@@ -44,8 +55,15 @@ fun CreateNotesScreen(
     var noteTitle by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
+
+    // Prompt Log Out
     var showLogoutDialog by remember { mutableStateOf(false) }
     var saveClicked by remember { mutableStateOf(false) }
+
+    // Reminder Function
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var reminderTime by remember { mutableStateOf<Calendar?>(null) }
 
     val notesViewModel: NotesViewModel = viewModel()
     val notesState by notesViewModel.notesState.collectAsState()
@@ -54,6 +72,69 @@ fun CreateNotesScreen(
     LaunchedEffect(notesState.isLoading) {
         if (saveClicked && !notesState.isLoading && notesState.error == null) {
             onSaveSuccess()
+        }
+    }
+
+    // --- ADD THIS DIALOG LOGIC ---
+    val context = LocalContext.current
+
+    // --- ADD THIS PERMISSION LAUNCHER ---
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (isGranted) {
+                // Permission was granted, now show the date picker
+                showDatePicker = true
+            } else {
+                // The user denied the permission. Show a message.
+                Toast.makeText(context, "Notification permission is required to set reminders.", Toast.LENGTH_LONG).show()
+            }
+        }
+    )
+
+    // 1. Date Picker Dialog
+    if (showDatePicker) {
+        val calendar = Calendar.getInstance()
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                reminderTime = Calendar.getInstance().apply {
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month)
+                    set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                }
+                showDatePicker = false
+                showTimePicker = true // Chain the time picker to show next
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).apply {
+            // Prevent setting reminders for past dates
+            datePicker.minDate = System.currentTimeMillis()
+            setOnCancelListener { showDatePicker = false } // Handle dismissing the dialog
+            show()
+        }
+    }
+
+    // 2. Time Picker Dialog
+    if (showTimePicker) {
+        val calendar = Calendar.getInstance()
+        TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                // Time has been selected, update our reminderTime state
+                reminderTime?.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                reminderTime?.set(Calendar.MINUTE, minute)
+                reminderTime?.set(Calendar.SECOND, 0) // Ensure seconds are zero
+                showTimePicker = false
+            },
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            false // Use 12-hour format (true for 24-hour)
+        ).apply {
+            setOnCancelListener { showTimePicker = false } // Handle dismissing the dialog
+            show()
         }
     }
 
@@ -90,14 +171,35 @@ fun CreateNotesScreen(
                     )
                 }
 
+                // Reminder button
+                IconButton(
+                    onClick = {
+                        // Check if the Android version is 13 (TIRAMISU) or higher
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            // Request the notification permission
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            // For older Android versions, permission is granted by default, so just show the picker
+                            showDatePicker = true
+                        }
+                    },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = "Set Reminder",
+                        tint = Color.Black
+                    )
+                }
+
                 // Centered Title
                 Text(
                     text = "Avara",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = WelcomeText,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
+                    textAlign = TextAlign.Center
+                    // modifier = Modifier.weight(1f)
                 )
 
                 // Menu Button
@@ -172,6 +274,17 @@ fun CreateNotesScreen(
                 )
             )
 
+            // --- ADD THIS TO DISPLAY THE REMINDER ---
+            reminderTime?.let {
+                val sdf = SimpleDateFormat("EEE, MMM d, yyyy 'at' h:mm a", Locale.getDefault())
+                Text(
+                    text = "Reminder: ${sdf.format(it.time)}",
+                    modifier = Modifier.padding(top = 8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
             // Error message display
             notesState.error?.let { error ->
                 Text(
@@ -187,7 +300,7 @@ fun CreateNotesScreen(
                 onClick = {
                     if (noteText.isNotBlank()) {
                         saveClicked = true
-                        notesViewModel.createNote(noteTitle, noteText)
+                        notesViewModel.createNote(noteTitle, noteText, reminderTime)
                     }
                 },
                 enabled = !notesState.isLoading && noteText.isNotBlank(),

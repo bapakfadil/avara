@@ -1,5 +1,7 @@
 package com.project.avara.viewmodel
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
@@ -10,6 +12,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.google.firebase.Timestamp
+import java.util.Calendar
 
 data class NotesState(
     val isLoading: Boolean = false,
@@ -17,23 +21,24 @@ data class NotesState(
     val error: String? = null
 )
 
-class NotesViewModel : ViewModel() {
+class NotesViewModel(application: Application) : AndroidViewModel(application) {
     private val notesRepository = NotesRepository(
         FirebaseFirestore.getInstance(),
-        FirebaseAuth.getInstance()
+        FirebaseAuth.getInstance(),
+        application.applicationContext // <-- This line will now work correctly
     )
-    
+
     private val _notesState = MutableStateFlow(NotesState())
     val notesState: StateFlow<NotesState> = _notesState.asStateFlow()
-    
+
     init {
         loadNotes()
     }
-    
+
     fun loadNotes() {
         viewModelScope.launch {
             _notesState.value = _notesState.value.copy(isLoading = true, error = null)
-            
+
             notesRepository.getNotes()
                 .onSuccess { notes ->
                     _notesState.value = _notesState.value.copy(
@@ -52,13 +57,22 @@ class NotesViewModel : ViewModel() {
         }
     }
 
-    fun createNote(title: String, content: String) {
+    fun createNote(title: String, content: String, reminderTime: Calendar?) { // <-- MODIFICATION 1
         viewModelScope.launch {
             _notesState.value = _notesState.value.copy(isLoading = true, error = null)
+
+            // MODIFICATION 2: Convert Calendar to Timestamp if it exists
+            val reminderTimestamp = reminderTime?.let {
+                Timestamp(it.time)
+            }
+
+            // MODIFICATION 3: Pass the reminder to the Note object
             val note = Note(
                 title = title.ifBlank { "Untitled" },
-                content = content
+                content = content,
+                reminderTime = reminderTimestamp
             )
+
             notesRepository.createNote(note)
                 .onSuccess {
                     // On success, just reload the list from the source of truth
@@ -111,7 +125,7 @@ class NotesViewModel : ViewModel() {
         // Clear the user-specific data from the state
         _notesState.value = NotesState()
     }
-    
+
     fun clearError() {
         _notesState.value = _notesState.value.copy(error = null)
     }
